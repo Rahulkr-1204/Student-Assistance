@@ -1,0 +1,10 @@
+flask
+flask-cors
+tensorflow
+numpy
+scikit-learn
+langdetect
+deep-translator
+python-dotenv
+pymongo
+bcrypt
