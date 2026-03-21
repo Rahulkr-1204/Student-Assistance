@@ -2,6 +2,8 @@ import os
 import json
 import numpy as np
 import pickle
+import shutil
+import tempfile
 from pathlib import Path
 
 from database import intents_collection
@@ -26,8 +28,68 @@ tokenizer = None
 label_encoder = None
 max_len = None
 
+
+def _remove_key_deep(value, key_to_remove):
+    if isinstance(value, dict):
+        return {
+            k: _remove_key_deep(v, key_to_remove)
+            for k, v in value.items()
+            if k != key_to_remove
+        }
+    if isinstance(value, list):
+        return [_remove_key_deep(item, key_to_remove) for item in value]
+    return value
+
+
+def _load_model_with_compat(model_path):
+    """
+    Try normal loading first.
+    If deserialization fails due unsupported config keys (e.g. quantization_config),
+    rewrite model_config in a temporary copy and retry load.
+    """
+    try:
+        return load_model(str(model_path), compile=False)
+    except Exception as original_error:
+        error_text = str(original_error)
+        if "quantization_config" not in error_text:
+            raise
+
+        try:
+            import h5py
+
+            with h5py.File(str(model_path), "r") as f:
+                raw_config = f.attrs.get("model_config")
+
+            if raw_config is None:
+                raise
+
+            if isinstance(raw_config, bytes):
+                raw_config = raw_config.decode("utf-8")
+
+            parsed_config = json.loads(raw_config)
+            cleaned_config = _remove_key_deep(parsed_config, "quantization_config")
+
+            temp_file = tempfile.NamedTemporaryFile(suffix=".h5", delete=False)
+            temp_file.close()
+            temp_model_path = Path(temp_file.name)
+
+            shutil.copy2(model_path, temp_model_path)
+            with h5py.File(str(temp_model_path), "r+") as f:
+                f.attrs["model_config"] = json.dumps(cleaned_config).encode("utf-8")
+
+            try:
+                return load_model(str(temp_model_path), compile=False)
+            finally:
+                try:
+                    temp_model_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+        except Exception:
+            raise original_error
+
+
 try:
-    model = load_model(str(MODEL_DIR / "chatbot_model.h5"), compile=False)
+    model = _load_model_with_compat(MODEL_DIR / "chatbot_model.h5")
     with (MODEL_DIR / "tokenizer.pickle").open("rb") as f:
         tokenizer = pickle.load(f)
     with (MODEL_DIR / "label_encoder.pickle").open("rb") as f:
