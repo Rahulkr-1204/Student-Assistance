@@ -21,16 +21,22 @@ INTENTS_FILE = BASE_DIR / "intents.json"
 # -----------------------------
 # Load Model Components
 # -----------------------------
-model = load_model(str(MODEL_DIR / "chatbot_model.h5"), compile=False)
+model = None
+tokenizer = None
+label_encoder = None
+max_len = None
 
-with (MODEL_DIR / "tokenizer.pickle").open("rb") as f:
-    tokenizer = pickle.load(f)
-
-with (MODEL_DIR / "label_encoder.pickle").open("rb") as f:
-    label_encoder = pickle.load(f)
-
-with (MODEL_DIR / "max_len.pickle").open("rb") as f:
-    max_len = pickle.load(f)
+try:
+    model = load_model(str(MODEL_DIR / "chatbot_model.h5"), compile=False)
+    with (MODEL_DIR / "tokenizer.pickle").open("rb") as f:
+        tokenizer = pickle.load(f)
+    with (MODEL_DIR / "label_encoder.pickle").open("rb") as f:
+        label_encoder = pickle.load(f)
+    with (MODEL_DIR / "max_len.pickle").open("rb") as f:
+        max_len = pickle.load(f)
+except Exception as e:
+    # Keep backend available even when model deserialization fails in some environments.
+    print("Model initialization failed; using pattern fallback only:", e)
 
 
 # -----------------------------
@@ -137,6 +143,25 @@ def get_response(user_input, return_meta=False):
         return result if return_meta else result["response"]
 
     try:
+        if not all([model is not None, tokenizer is not None, label_encoder is not None, max_len is not None]):
+            fallback, fallback_intent = pattern_fallback(user_input)
+            if fallback:
+                result = _response_result(
+                    response=fallback,
+                    matched=True,
+                    intent_tag=fallback_intent,
+                    confidence=None,
+                    source="pattern_fallback",
+                )
+                return result if return_meta else result["response"]
+            result = _response_result(
+                response=UNKNOWN_RESPONSE,
+                matched=False,
+                intent_tag=None,
+                confidence=None,
+                source="model_unavailable",
+            )
+            return result if return_meta else result["response"]
 
         # Convert text to sequence
         sequence = tokenizer.texts_to_sequences([user_input])
