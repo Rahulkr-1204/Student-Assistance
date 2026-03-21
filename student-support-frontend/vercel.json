@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://student-assistance.onrender.com/api/:path*"
+    }
+  ],
   "routes": [
     {
       "handle": "filesystem"

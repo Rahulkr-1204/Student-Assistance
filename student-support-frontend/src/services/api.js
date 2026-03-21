@@ -1,6 +1,24 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const DEFAULT_PROD_API_BASE_URL = "https://student-assistance.onrender.com/api";
+
+const resolveApiBaseUrl = () => {
+  const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  if (typeof window === "undefined") {
+    return "/api";
+  }
+
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+
+  return isLocalhost ? "/api" : DEFAULT_PROD_API_BASE_URL;
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const API = axios.create({
   baseURL: API_BASE_URL

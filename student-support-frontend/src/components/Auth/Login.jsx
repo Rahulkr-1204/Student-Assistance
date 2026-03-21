@@ -33,7 +33,7 @@ function Login() {
       navigate("/chat");
     } catch (err) {
       if (!err.response) {
-        setError("Cannot reach backend API. Check local backend is running on port 5000.");
+        setError("Cannot reach backend API. Check deployment/API URL and try again.");
       } else {
         setError(err.response?.data?.error || "Login failed");
       }
