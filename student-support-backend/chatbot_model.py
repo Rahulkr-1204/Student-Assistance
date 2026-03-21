@@ -12,6 +12,7 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 
 from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import Embedding
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 
@@ -55,6 +56,22 @@ def _load_model_with_compat(model_path):
             raise
 
         try:
+            class CompatEmbedding(Embedding):
+                def __init__(self, *args, **kwargs):
+                    # Keras version mismatch can pass this unknown key from older/newer model configs.
+                    kwargs.pop("quantization_config", None)
+                    super().__init__(*args, **kwargs)
+
+            # First try custom-object based deserialization (fast path).
+            try:
+                return load_model(
+                    str(model_path),
+                    compile=False,
+                    custom_objects={"Embedding": CompatEmbedding},
+                )
+            except Exception:
+                pass
+
             import h5py
 
             with h5py.File(str(model_path), "r") as f:
