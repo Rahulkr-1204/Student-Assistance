@@ -37,22 +37,17 @@ docker compose down
 - Frontend API base URL now defaults to `/api` (production-friendly).
 - If you deploy on a cloud VM, open inbound ports `80` and `5000` in firewall/security group.
 
-## Public Hosting (Render)
+## Public Hosting (Railway + Vercel)
 
-### 1) Push latest code to GitHub
-Your repo is already connected:
-- `https://github.com/Rahulkr-1204/Student-Assistance`
+### 1) Backend on Railway (free-friendly)
+1. Open Railway dashboard and click `New Project` -> `Deploy from GitHub repo`.
+2. Select `Student-Assistance`.
+3. Set `Root Directory` to `student-support-backend`.
+4. Railway will install dependencies and run:
+   - `gunicorn --bind 0.0.0.0:$PORT app:app`
 
-### 2) Create services from `render.yaml`
-1. Open Render Dashboard
-2. Click `New +` -> `Blueprint`
-3. Connect your GitHub repo and select `Student-Assistance`
-4. Render will detect `render.yaml` and propose:
-   - `student-assistance-backend` (Python web service)
-   - `student-assistance-frontend` (Static site)
-
-### 3) Set backend environment variables (Render -> backend -> Environment)
-Add the same values from `student-support-backend/.env` except local-only values:
+### 2) Backend environment variables on Railway
+Add these in Railway service variables:
 - `MONGO_URI`
 - `MONGO_DB_NAME`
 - `SMTP_HOST`
@@ -62,21 +57,31 @@ Add the same values from `student-support-backend/.env` except local-only values
 - `SMTP_FROM_EMAIL`
 - `SMTP_USE_TLS`
 - `SMTP_USE_SSL`
-- `TELEGRAM_BOT_TOKEN` (only if needed in production)
-- `TELEGRAM_WEBHOOK_SECRET` (only if needed in production)
+- `TELEGRAM_BOT_TOKEN` (optional)
+- `TELEGRAM_WEBHOOK_SECRET` (optional)
 
+Keep this for now (update after frontend is live):
+- `FRONTEND_BASE_URL=https://<your-vercel-frontend-domain>`
+
+### 3) Frontend on Vercel (free)
+1. Open Vercel dashboard and click `Add New...` -> `Project`.
+2. Import `Student-Assistance` from GitHub.
+3. Set `Root Directory` to `student-support-frontend`.
+4. Build settings:
+- Build Command: `npm run build`
+- Output Directory: `dist`
+
+### 4) Frontend environment variable on Vercel
 Set:
-- `FRONTEND_BASE_URL=https://<your-frontend-onrender-domain>`
+- `VITE_API_BASE_URL=https://<your-railway-backend-domain>/api`
 
-### 4) Set frontend API URL
-In Render -> frontend -> Environment:
-- `VITE_API_BASE_URL=https://<your-backend-onrender-domain>/api`
+### 5) Deploy order
+1. Deploy backend first (Railway), copy backend URL.
+2. Deploy frontend (Vercel) with `VITE_API_BASE_URL`.
+3. Update backend `FRONTEND_BASE_URL` to your Vercel URL.
+4. Redeploy backend once.
 
-### 5) Deploy and test
-- Frontend URL: `https://<frontend>.onrender.com`
-- Backend health: `https://<backend>.onrender.com/`
-- DB status: `https://<backend>.onrender.com/api/db-status`
-
-### 6) Optional custom domain
-- Add your domain in each Render service settings.
-- Update `FRONTEND_BASE_URL` and `VITE_API_BASE_URL` to final domains.
+### 6) Verify
+- Frontend: `https://<your-vercel-domain>`
+- Backend health: `https://<your-railway-domain>/`
+- Backend DB check: `https://<your-railway-domain>/api/db-status`
