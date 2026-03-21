@@ -1,55 +1,33 @@
-# Deployment Guide (Docker)
+# Public Hosting Guide (Railway + Vercel)
+
+This project is configured for free-friendly public hosting using:
+- Backend: Railway
+- Frontend: Vercel
 
 ## 1) Prerequisites
-- Install Docker Desktop
-- Ensure ports `80` and `5000` are free on your machine/server
+- Push your repository to GitHub.
+- Keep backend secrets ready (`MONGO_URI`, `SMTP_*`, etc.).
 
-## 2) Configure backend environment
-- Update `student-support-backend/.env` with production values
-- Keep `MONGO_URI`, `SMTP_*`, and tokens valid for your server environment
+## 2) Deploy Backend on Railway
+1. Open Railway and click `New Project` -> `Deploy from GitHub Repo`.
+2. Select repository: `Student-Assistance`.
+3. Open the created service -> `Settings` -> `Root Directory`.
+4. Set root directory to:
+`student-support-backend`
+5. Confirm start command is:
+`gunicorn --bind 0.0.0.0:$PORT app:app`
+6. Redeploy the service.
 
-## 3) Build and start containers
-From project root (`d:\Student_Assistance`):
-
-```bash
-docker compose up --build -d
-```
-
-## 4) Verify
-- Frontend: `http://localhost`
-- Backend health: `http://localhost:5000/`
-- Backend DB status: `http://localhost:5000/api/db-status`
-
-## 5) Logs and restart
-```bash
-docker compose logs -f
-docker compose restart backend
-docker compose restart frontend
-```
-
-## 6) Stop
-```bash
-docker compose down
-```
-
-## Notes
-- Frontend uses Nginx and proxies `/api/*` to backend service inside Docker network.
-- Frontend API base URL now defaults to `/api` (production-friendly).
-- If you deploy on a cloud VM, open inbound ports `80` and `5000` in firewall/security group.
-
-## Public Hosting (Railway + Vercel)
-
-### 1) Backend on Railway (free-friendly)
-1. Open Railway dashboard and click `New Project` -> `Deploy from GitHub repo`.
-2. Select `Student-Assistance`.
-3. Set `Root Directory` to `student-support-backend`.
-4. Railway will install dependencies and run:
-   - `gunicorn --bind 0.0.0.0:$PORT app:app`
-
-### 2) Backend environment variables on Railway
-Add these in Railway service variables:
+## 3) Set Backend Environment Variables (Railway)
+Add these variables in Railway service settings:
 - `MONGO_URI`
 - `MONGO_DB_NAME`
+- `MONGO_SERVER_SELECTION_TIMEOUT_MS` (optional, default `15000`)
+- `MONGO_CONNECT_TIMEOUT_MS` (optional, default `10000`)
+- `MONGO_SOCKET_TIMEOUT_MS` (optional, default `10000`)
+- `ADMIN_TOKEN_SECRET`
+- `ADMIN_TOKEN_SALT` (optional)
+- `ADMIN_TOKEN_EXPIRES_SECONDS` (optional)
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USERNAME`
@@ -57,31 +35,51 @@ Add these in Railway service variables:
 - `SMTP_FROM_EMAIL`
 - `SMTP_USE_TLS`
 - `SMTP_USE_SSL`
+- `FRONTEND_BASE_URL` (set this after Vercel deploy)
 - `TELEGRAM_BOT_TOKEN` (optional)
 - `TELEGRAM_WEBHOOK_SECRET` (optional)
+- `WHATSAPP_ACCESS_TOKEN` (optional)
+- `WHATSAPP_PHONE_NUMBER_ID` (optional)
+- `WHATSAPP_VERIFY_TOKEN` (optional)
+- `INSTAGRAM_ACCESS_TOKEN` (optional)
+- `INSTAGRAM_BUSINESS_ACCOUNT_ID` (optional)
+- `INSTAGRAM_VERIFY_TOKEN` (optional)
 
-Keep this for now (update after frontend is live):
-- `FRONTEND_BASE_URL=https://<your-vercel-frontend-domain>`
-
-### 3) Frontend on Vercel (free)
-1. Open Vercel dashboard and click `Add New...` -> `Project`.
-2. Import `Student-Assistance` from GitHub.
-3. Set `Root Directory` to `student-support-frontend`.
-4. Build settings:
+## 4) Deploy Frontend on Vercel
+1. Open Vercel -> `Add New...` -> `Project`.
+2. Import repository: `Student-Assistance`.
+3. Set `Root Directory` to:
+`student-support-frontend`
+4. Use build settings:
 - Build Command: `npm run build`
 - Output Directory: `dist`
-
-### 4) Frontend environment variable on Vercel
-Set:
+5. Add environment variable:
 - `VITE_API_BASE_URL=https://<your-railway-backend-domain>/api`
+6. Deploy.
 
-### 5) Deploy order
-1. Deploy backend first (Railway), copy backend URL.
-2. Deploy frontend (Vercel) with `VITE_API_BASE_URL`.
-3. Update backend `FRONTEND_BASE_URL` to your Vercel URL.
-4. Redeploy backend once.
+## 5) Final Link-Up
+1. Copy your Vercel URL.
+2. In Railway, set:
+- `FRONTEND_BASE_URL=https://<your-vercel-domain>`
+3. Redeploy backend once.
 
-### 6) Verify
+## 6) Verification
 - Frontend: `https://<your-vercel-domain>`
 - Backend health: `https://<your-railway-domain>/`
-- Backend DB check: `https://<your-railway-domain>/api/db-status`
+- Backend DB status: `https://<your-railway-domain>/api/db-status`
+
+## Optional: Local Docker Deployment
+If you want local container deployment instead of public hosting:
+
+```bash
+docker compose up --build -d
+```
+
+Useful commands:
+
+```bash
+docker compose logs -f
+docker compose restart backend
+docker compose restart frontend
+docker compose down
+```

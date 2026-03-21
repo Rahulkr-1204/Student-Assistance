@@ -517,20 +517,32 @@ def _build_change_diff(before_doc, after_doc):
 def admin_login():
     data = request.get_json(silent=True) or {}
 
-    username = (data.get("username") or "").strip()
+    username = (
+        data.get("username")
+        or data.get("identifier")
+        or data.get("email")
+        or ""
+    ).strip()
     password = data.get("password") or ""
 
     if not username or not password:
         return jsonify({"error": "Missing admin credentials"}), 400
 
     try:
-        admin = admins_collection.find_one({"username": username})
+        admin = admins_collection.find_one(
+            {
+                "$or": [
+                    {"username": {"$regex": f"^{re.escape(username)}$", "$options": "i"}},
+                    {"email": {"$regex": f"^{re.escape(username)}$", "$options": "i"}},
+                ]
+            }
+        )
 
         if not admin:
-            return jsonify({"error": "Admin not found"}), 404
+            return jsonify({"error": "Invalid admin credentials"}), 401
 
         if not _admin_password_matches(admin, password):
-            return jsonify({"error": "Invalid password"}), 401
+            return jsonify({"error": "Invalid admin credentials"}), 401
 
         admin_payload = {
             "username": admin.get("username"),

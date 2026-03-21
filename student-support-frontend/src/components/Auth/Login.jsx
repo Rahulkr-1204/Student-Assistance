@@ -32,7 +32,11 @@ function Login() {
       localStorage.setItem("loggedInUser", JSON.stringify(res.data.user));
       navigate("/chat");
     } catch (err) {
-      setError(err.response?.data?.error || "Login failed");
+      if (!err.response) {
+        setError("Cannot reach backend API. Check local backend is running on port 5000.");
+      } else {
+        setError(err.response?.data?.error || "Login failed");
+      }
     } finally {
       setLoading(false);
     }

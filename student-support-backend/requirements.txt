@@ -9,3 +9,4 @@ python-dotenv
 pymongo
 bcrypt
 vaderSentiment
+gunicorn

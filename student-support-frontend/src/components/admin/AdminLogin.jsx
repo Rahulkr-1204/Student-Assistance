@@ -35,7 +35,11 @@ function AdminLogin() {
       }
       navigate("/admin/dashboard");
     } catch (err) {
-      setError(err.response?.data?.error || "Admin login failed");
+      if (!err.response) {
+        setError("Cannot reach backend API. Check server URL and deployment status.");
+      } else {
+        setError(err.response?.data?.error || "Admin login failed");
+      }
     } finally {
       setLoading(false);
     }
