@@ -15,6 +15,20 @@ def _hash_token(raw_token):
     return hashlib.sha256((raw_token or "").encode("utf-8")).hexdigest()
 
 
+def _password_matches(raw_password, stored_password):
+    if not stored_password:
+        return False
+
+    if isinstance(stored_password, bytes):
+        candidate = stored_password
+    elif isinstance(stored_password, str):
+        candidate = stored_password.encode("utf-8")
+    else:
+        return False
+
+    return bcrypt.checkpw(raw_password.encode("utf-8"), candidate)
+
+
 # -----------------------------
 # Register User
 # -----------------------------
@@ -93,8 +107,8 @@ def login():
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        # Check password
-        if not bcrypt.checkpw(password.encode("utf-8"), user["password"]):
+        # Support hashes stored as either bytes or strings.
+        if not _password_matches(password, user.get("password")):
             return jsonify({"error": "Invalid password"}), 401
 
         return jsonify({

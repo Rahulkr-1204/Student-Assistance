@@ -1,20 +1,14 @@
 import axios from "axios";
 
 const resolveApiBaseUrl = () => {
-  if (typeof window === "undefined") {
-    const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
-    if (configuredBaseUrl) {
-      return configuredBaseUrl;
-    }
-    return "/api";
+  const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
+
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
   }
 
-  const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-
-  if (isLocalhost && configuredBaseUrl) {
-    return configuredBaseUrl;
+  if (typeof window === "undefined") {
+    return "/api";
   }
 
   return "/api";

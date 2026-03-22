@@ -1,7 +1,6 @@
 from langdetect import detect, LangDetectException
 from deep_translator import GoogleTranslator
 
-from chatbot_model import get_response
 from services.query_router import try_handle_functional_query
 from services.chat_logger import save_chat_log
 from utils.sentiment_analyzer import detect_sentiment
@@ -16,6 +15,13 @@ def translate_to_en(text, source_lang):
 
 def translate_from_en(text, target_lang):
     return GoogleTranslator(source="en", target=target_lang).translate(text)
+
+
+def _get_chatbot_response(*args, **kwargs):
+    # Lazy import keeps the web server boot fast on hosts that probe the HTTP port early.
+    from chatbot_model import get_response
+
+    return get_response(*args, **kwargs)
 
 
 def process_chat_message(message, user="guest", save_log=True):
@@ -54,7 +60,7 @@ def process_chat_message(message, user="guest", save_log=True):
             match_source = route_result.get("match_source")
             response_route = "functional_module"
         else:
-            chatbot_result = get_response(translated_message, return_meta=True)
+            chatbot_result = _get_chatbot_response(translated_message, return_meta=True)
             response_en = chatbot_result.get("response")
             matched = chatbot_result.get("matched")
             matched_intent = chatbot_result.get("intent_tag")
@@ -66,7 +72,7 @@ def process_chat_message(message, user="guest", save_log=True):
 
     except Exception as e:
         print("Translation or routing error:", e)
-        fallback_result = get_response(message, return_meta=True)
+        fallback_result = _get_chatbot_response(message, return_meta=True)
         final_response = fallback_result.get("response")
         matched = fallback_result.get("matched")
         matched_intent = fallback_result.get("intent_tag")
