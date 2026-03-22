@@ -1,21 +1,23 @@
 import axios from "axios";
 
-const DEFAULT_PROD_API_BASE_URL = "https://student-assistance.onrender.com/api";
-
 const resolveApiBaseUrl = () => {
-  const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
-  if (configuredBaseUrl) {
-    return configuredBaseUrl;
-  }
-
   if (typeof window === "undefined") {
+    const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
+    if (configuredBaseUrl) {
+      return configuredBaseUrl;
+    }
     return "/api";
   }
 
+  const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
   const hostname = window.location.hostname;
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
 
-  return isLocalhost ? "/api" : DEFAULT_PROD_API_BASE_URL;
+  if (isLocalhost && configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  return "/api";
 };
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -281,5 +283,16 @@ export const getCounselingBookings = (params = {}) =>
 export const updateCounselingBookingStatus = (bookingId, data) =>
   API.put(`/admin/counseling-bookings/${encodeURIComponent(bookingId)}/status`, data);
 
+export const getApiErrorMessage = (error, fallback) => {
+  if (!error?.response) {
+    return "Cannot reach backend API. Check that the deployed frontend is pointing to a live backend.";
+  }
+
+  return (
+    error.response?.data?.details ||
+    error.response?.data?.error ||
+    fallback
+  );
+};
 
 export default API;

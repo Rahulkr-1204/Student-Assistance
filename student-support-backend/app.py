@@ -33,7 +33,21 @@ from student.campus_routes import campus_routes
 
 # Initialize app
 app = Flask(__name__)
-CORS(app)
+
+allowed_origins = {
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+}
+
+frontend_base_url = os.getenv("FRONTEND_BASE_URL", "").strip()
+if frontend_base_url:
+    allowed_origins.add(frontend_base_url.rstrip("/"))
+
+CORS(
+    app,
+    resources={r"/api/*": {"origins": list(allowed_origins)}},
+    supports_credentials=False,
+)
 
 # Register routes
 app.register_blueprint(auth_routes, url_prefix="/api")

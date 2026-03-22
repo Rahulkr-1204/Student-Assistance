@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BackgroundSlider from "../Background/BackgroundSlider";
-import { forgotPassword, loginUser, resetPassword } from "../../services/api";
+import { forgotPassword, getApiErrorMessage, loginUser, resetPassword } from "../../services/api";
 import "./Auth.css";
 
 function Login() {
@@ -32,11 +32,7 @@ function Login() {
       localStorage.setItem("loggedInUser", JSON.stringify(res.data.user));
       navigate("/chat");
     } catch (err) {
-      if (!err.response) {
-        setError("Cannot reach backend API. Check deployment/API URL and try again.");
-      } else {
-        setError(err.response?.data?.error || "Login failed");
-      }
+      setError(getApiErrorMessage(err, "Login failed"));
     } finally {
       setLoading(false);
     }
@@ -67,7 +63,7 @@ function Login() {
         );
       }
     } catch (err) {
-      setForgotMessage(err.response?.data?.error || "Failed to generate reset token");
+      setForgotMessage(getApiErrorMessage(err, "Failed to generate reset token"));
     } finally {
       setForgotLoading(false);
     }
@@ -91,7 +87,7 @@ function Login() {
       setResetToken("");
       setNewPassword("");
     } catch (err) {
-      setForgotMessage(err.response?.data?.error || "Password reset failed");
+      setForgotMessage(getApiErrorMessage(err, "Password reset failed"));
     } finally {
       setForgotLoading(false);
     }

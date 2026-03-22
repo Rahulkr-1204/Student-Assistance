@@ -3,7 +3,12 @@ import { useNavigate } from "react-router-dom";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import "./chatbot.css";
 import Sidebar from "../Layout/Sidebar";
-import { getGeneratedFaqs, sendMessage, sendVoiceMessage } from "../../services/api";
+import {
+  getApiErrorMessage,
+  getGeneratedFaqs,
+  sendMessage,
+  sendVoiceMessage,
+} from "../../services/api";
 
 const CHAT_SESSIONS_KEY = "chatSessions";
 const ACTIVE_CHAT_KEY = "activeChatId";
@@ -207,9 +212,9 @@ function Chatbot() {
         speak(res.data.response);
         setVoiceMode(false);
       }
-    } catch {
+    } catch (error) {
       appendMessageToSession(sessionId, {
-        text: "Server error. Please try again.",
+        text: getApiErrorMessage(error, "Server error. Please try again."),
         sender: "bot",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       });
@@ -248,9 +253,9 @@ function Chatbot() {
       });
 
       speak(ttsText);
-    } catch {
+    } catch (error) {
       appendMessageToSession(sessionId, {
-        text: "Voice processing failed. Please type your question once.",
+        text: getApiErrorMessage(error, "Voice processing failed. Please type your question once."),
         sender: "bot",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       });

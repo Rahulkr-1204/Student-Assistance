@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { adminForgotPassword, adminLogin, adminResetPassword } from "../../services/api";
+import {
+  adminForgotPassword,
+  adminLogin,
+  adminResetPassword,
+  getApiErrorMessage,
+} from "../../services/api";
 import "./Admin.css";
 
 function AdminLogin() {
@@ -35,11 +40,7 @@ function AdminLogin() {
       }
       navigate("/admin/dashboard");
     } catch (err) {
-      if (!err.response) {
-        setError("Cannot reach backend API. Check server URL and deployment status.");
-      } else {
-        setError(err.response?.data?.error || "Admin login failed");
-      }
+      setError(getApiErrorMessage(err, "Admin login failed"));
     } finally {
       setLoading(false);
     }
@@ -71,7 +72,7 @@ function AdminLogin() {
         );
       }
     } catch (err) {
-      setForgotMessage(err.response?.data?.error || "Failed to generate reset token");
+      setForgotMessage(getApiErrorMessage(err, "Failed to generate reset token"));
     } finally {
       setForgotLoading(false);
     }
@@ -95,7 +96,7 @@ function AdminLogin() {
       setResetToken("");
       setNewPassword("");
     } catch (err) {
-      setForgotMessage(err.response?.data?.error || "Admin password reset failed");
+      setForgotMessage(getApiErrorMessage(err, "Admin password reset failed"));
     } finally {
       setForgotLoading(false);
     }
