@@ -16,6 +16,8 @@ const resolveApiBaseUrl = () => {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+console.log("BASE URL:", API_BASE_URL);
+
 const API = axios.create({
   baseURL: API_BASE_URL
 });
