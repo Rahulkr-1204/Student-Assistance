@@ -37,7 +37,8 @@ app = Flask(__name__)
 allowed_origins = {
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://student-assistance-rahul.vercel.app"
+    "https://student-assistance-rahul.vercel.app",
+    "https://student-assistance-ff0uw1u9r-rahul-kumars-projects-e5816ae5.vercel.app",
 }
 
 frontend_base_url = os.getenv("FRONTEND_BASE_URL", "").strip()
