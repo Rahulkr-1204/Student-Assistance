@@ -19,24 +19,33 @@ function Login() {
   const [forgotLoading, setForgotLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!identifier || !password) {
-      setError("Please enter email/registration number and password");
-      return;
-    }
+  console.log("LOGIN CLICKED"); // 🔥 DEBUG
 
-    try {
-      setLoading(true);
-      setError("");
+  if (!identifier || !password) {
+    console.log("Missing fields");
+    setError("Please enter email/registration number and password");
+    return;
+  }
 
-      const res = await loginUser({ identifier, password });
-      localStorage.setItem("loggedInUser", JSON.stringify(res.data.user));
-      navigate("/chat");
-    } catch (err) {
-      setError(getApiErrorMessage(err, "Login failed"));
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    setError("");
+
+    console.log("Calling API...");
+
+    const res = await loginUser({ identifier, password });
+
+    console.log("API RESPONSE:", res);
+
+    localStorage.setItem("loggedInUser", JSON.stringify(res.data.user));
+    navigate("/chat");
+  } catch (err) {
+    console.log("ERROR:", err); // 🔥 VERY IMPORTANT
+    setError(getApiErrorMessage(err, "Login failed"));
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
