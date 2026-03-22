@@ -1,11 +1,9 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
-import re
 import requests
 from dotenv import load_dotenv
 from pathlib import Path
-from urllib.parse import urlparse
 
 # Load env variables
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -40,29 +38,14 @@ allowed_origins = {
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 }
-allowed_origin_patterns = []
 
 frontend_base_url = os.getenv("FRONTEND_BASE_URL", "").strip()
 if frontend_base_url:
-    normalized_frontend_base_url = frontend_base_url.rstrip("/")
-    allowed_origins.add(normalized_frontend_base_url)
-
-    parsed_frontend_url = urlparse(normalized_frontend_base_url)
-    frontend_host = parsed_frontend_url.netloc.lower()
-    if frontend_host.endswith(".vercel.app"):
-        project_prefix = frontend_host.split(".vercel.app", 1)[0]
-        if project_prefix:
-            allowed_origin_patterns.append(
-                re.compile(rf"^https://{re.escape(project_prefix)}(?:-[^.]+)?\.vercel\.app$")
-            )
-
-cors_origins = list(allowed_origins)
-if allowed_origin_patterns:
-    cors_origins.extend(allowed_origin_patterns)
+    allowed_origins.add(frontend_base_url.rstrip("/"))
 
 CORS(
     app,
-    resources={r"/api/*": {"origins": cors_origins}},
+    resources={r"/api/*": {"origins": list(allowed_origins)}},
     supports_credentials=False,
 )
 
