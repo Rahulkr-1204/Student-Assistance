@@ -17,6 +17,24 @@ CANONICAL_WEBHOOK_PATH = "/api/integrations/telegram/webhook"
 LOCAL_WEBHOOK_URL = f"http://localhost:5000{CANONICAL_WEBHOOK_PATH}"
 
 
+def _public_base_url():
+    candidates = [
+        os.getenv("BACKEND_PUBLIC_BASE_URL", "").strip(),
+        os.getenv("RENDER_EXTERNAL_URL", "").strip(),
+        os.getenv("RAILWAY_STATIC_URL", "").strip(),
+    ]
+
+    railway_public_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    if railway_public_domain:
+        candidates.append(f"https://{railway_public_domain}")
+
+    for candidate in candidates:
+        if candidate:
+            return candidate.rstrip("/")
+
+    return ""
+
+
 def set_webhook(webhook_url):
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     if not bot_token:
@@ -109,14 +127,35 @@ def test_local_handler():
 
 
 def main():
+    detected_base_url = _public_base_url()
+
     print("Quick Telegram Webhook Setup")
     print("=" * 50)
-    print("1. Set webhook using a public HTTPS base URL")
-    print("2. Test local webhook handler only")
+    if detected_base_url:
+        print(f"Detected public backend URL: {detected_base_url}")
+    else:
+        print("No public backend URL detected from environment.")
+        print("Set BACKEND_PUBLIC_BASE_URL in .env for stable deployed webhook setup.")
 
-    choice = input("\nEnter choice (1-2): ").strip()
+    print("1. Set webhook using detected deployed backend URL")
+    print("2. Enter a public HTTPS base URL manually")
+    print("3. Test local webhook handler only")
+
+    choice = input("\nEnter choice (1-3): ").strip()
 
     if choice == "1":
+        if not detected_base_url:
+            print("No deployed backend URL detected. Set BACKEND_PUBLIC_BASE_URL first.")
+            return
+        webhook_url = f"{detected_base_url}{CANONICAL_WEBHOOK_PATH}"
+        if set_webhook(webhook_url):
+            print("\nNext steps:")
+            print("1. Redeploy your backend if you changed code or environment variables")
+            print("2. Send a message to your Telegram bot")
+            print("3. Check Telegram webhook info if delivery still fails")
+        return
+
+    if choice == "2":
         base_url = input("Enter your public HTTPS base URL (for example, https://abc123.ngrok-free.app): ").strip().rstrip("/")
         if not base_url.startswith("https://"):
             print("Telegram requires a public HTTPS URL.")
@@ -130,7 +169,7 @@ def main():
             print("3. Check backend logs if delivery still fails")
         return
 
-    if choice == "2":
+    if choice == "3":
         test_local_handler()
         return
 

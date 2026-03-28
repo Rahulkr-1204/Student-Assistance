@@ -36,6 +36,7 @@ Add these variables in Railway service settings:
 - `SMTP_USE_TLS`
 - `SMTP_USE_SSL`
 - `FRONTEND_BASE_URL` (set this after Vercel deploy)
+- `BACKEND_PUBLIC_BASE_URL` (for example `https://student-assistance.onrender.com` or your Railway domain)
 - `TELEGRAM_BOT_TOKEN` (optional)
 - `TELEGRAM_WEBHOOK_SECRET` (optional)
 - `WHATSAPP_ACCESS_TOKEN` (optional)
@@ -67,6 +68,18 @@ Add these variables in Railway service settings:
 - Frontend: `https://<your-vercel-domain>`
 - Backend health: `https://<your-railway-domain>/`
 - Backend DB status: `https://<your-railway-domain>/api/db-status`
+
+## 7) Telegram Webhook
+After the backend is publicly deployed, point Telegram to the stable deployed backend instead of ngrok:
+
+1. Set `BACKEND_PUBLIC_BASE_URL=https://<your-backend-domain>` in backend environment variables.
+2. Redeploy the backend.
+3. Run:
+`python setup_telegram_webhook.py`
+4. Choose the option to use the detected deployed backend URL.
+
+The webhook path must remain:
+`/api/integrations/telegram/webhook`
 
 ## Optional: Local Docker Deployment
 If you want local container deployment instead of public hosting:
