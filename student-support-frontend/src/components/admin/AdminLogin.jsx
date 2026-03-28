@@ -23,6 +23,21 @@ function AdminLogin() {
   const [forgotMessage, setForgotMessage] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
 
+  const toggleForgotPassword = () => {
+    setShowForgot((previous) => {
+      const next = !previous;
+      if (next && !forgotIdentifier.trim() && username.trim()) {
+        setForgotIdentifier(username.trim());
+      }
+      if (!next) {
+        setForgotMessage("");
+        setResetToken("");
+        setNewPassword("");
+      }
+      return next;
+    });
+  };
+
   const handleLogin = async () => {
     if (!username || !password) {
       setError("Please enter username and password");
@@ -64,11 +79,11 @@ function AdminLogin() {
       const res = await adminForgotPassword(forgotIdentifier.trim());
       if (res.data?.reset_token) {
         setForgotMessage(
-          `Reset token: ${res.data.reset_token} (valid for ${res.data?.expires_in_minutes || 20} minutes)`
+          `Your 6-digit reset code is ${res.data.reset_token}. It is valid for ${res.data?.expires_in_minutes || 20} minutes. Enter it below to set a new password.`
         );
       } else {
         setForgotMessage(
-          res.data?.message || "If account exists, a reset token has been sent to admin email."
+          res.data?.message || "If account exists, a 6-digit reset code has been sent to admin email."
         );
       }
     } catch (err) {
@@ -83,6 +98,10 @@ function AdminLogin() {
       setForgotMessage("Enter identifier, reset token and new password");
       return;
     }
+    if (newPassword.trim().length < 6) {
+      setForgotMessage("New password must be at least 6 characters");
+      return;
+    }
 
     try {
       setForgotLoading(true);
@@ -93,8 +112,10 @@ function AdminLogin() {
         new_password: newPassword,
       });
       setForgotMessage(res.data?.message || "Admin password reset successful");
+      setPassword("");
       setResetToken("");
       setNewPassword("");
+      setUsername(forgotIdentifier.trim());
     } catch (err) {
       setForgotMessage(getApiErrorMessage(err, "Admin password reset failed"));
     } finally {
@@ -129,7 +150,7 @@ function AdminLogin() {
           {loading ? "Signing in..." : "Sign In"}
         </button>
 
-        <button type="button" className="muted-btn" onClick={() => setShowForgot((p) => !p)}>
+        <button type="button" className="muted-btn" onClick={toggleForgotPassword}>
           {showForgot ? "Hide Forgot Password" : "Forgot Password?"}
         </button>
 
@@ -142,12 +163,12 @@ function AdminLogin() {
             />
             <div className="forgot-actions">
               <button type="button" className="admin-btn" onClick={handleForgotPassword} disabled={forgotLoading}>
-                {forgotLoading ? "Processing..." : "Get Reset Token"}
+                {forgotLoading ? "Processing..." : "Get Reset Code"}
               </button>
             </div>
 
             <input
-              placeholder="Reset Token"
+              placeholder="6-digit Reset Code"
               value={resetToken}
               onChange={(e) => setResetToken(e.target.value)}
             />
@@ -157,6 +178,7 @@ function AdminLogin() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
+            <p className="form-note">New password must be at least 6 characters.</p>
             <div className="forgot-actions">
               <button type="button" className="admin-btn" onClick={handleResetPassword} disabled={forgotLoading}>
                 {forgotLoading ? "Processing..." : "Reset Password"}

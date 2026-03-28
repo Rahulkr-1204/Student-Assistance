@@ -205,7 +205,7 @@ function Counseling() {
       <form className="admin-toolbar" onSubmit={runFilter}>
         <input
           className="admin-input"
-          placeholder="Search student or message"
+          placeholder="Search student, booking code or message"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -273,6 +273,7 @@ function Counseling() {
               <table className="admin-table">
                 <thead>
                   <tr>
+                    <th>Booking Code</th>
                     <th>Student</th>
                     <th>Message</th>
                     <th>Preferred Date</th>
@@ -290,6 +291,7 @@ function Counseling() {
 
                     return (
                       <tr key={booking.id}>
+                        <td>{booking.booking_code || booking.id || "-"}</td>
                         <td>{booking.student || "-"}</td>
                         <td>{booking.message || "-"}</td>
                         <td>{booking.preferred_date || "-"}</td>

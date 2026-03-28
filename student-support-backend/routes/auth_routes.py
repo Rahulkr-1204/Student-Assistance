@@ -11,8 +11,41 @@ auth_routes = Blueprint("auth_routes", __name__)
 RESET_TOKEN_TTL_MINUTES = 20
 
 
+def _generate_reset_code():
+    return f"{secrets.randbelow(1000000):06d}"
+
+
 def _hash_token(raw_token):
     return hashlib.sha256((raw_token or "").encode("utf-8")).hexdigest()
+
+
+def _extract_identifier(data):
+    return (
+        (data.get("identifier") or "")
+        or (data.get("email") or "")
+        or (data.get("registration_number") or "")
+    ).strip()
+
+
+def _parse_expiry_datetime(value):
+    if isinstance(value, datetime):
+        return value
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+
+        normalized = text.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is not None:
+                return parsed.replace(tzinfo=None)
+            return parsed
+        except ValueError:
+            return None
+
+    return None
 
 
 def _password_matches(raw_password, stored_password):
@@ -133,9 +166,9 @@ def login():
 @auth_routes.route("/forgot-password", methods=["POST"])
 def forgot_password():
     data = request.get_json(silent=True) or {}
-    identifier = (data.get("identifier") or "").strip()
+    identifier = _extract_identifier(data)
     if not identifier:
-        return jsonify({"error": "identifier is required"}), 400
+        return jsonify({"error": "identifier, email, or registration_number is required"}), 400
 
     try:
         user = users_collection.find_one({
@@ -148,7 +181,7 @@ def forgot_password():
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        reset_token = secrets.token_urlsafe(24)
+        reset_token = _generate_reset_code()
         token_hash = _hash_token(reset_token)
         expires_at = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)
 
@@ -205,12 +238,21 @@ def forgot_password():
 def reset_password():
     data = request.get_json(silent=True) or {}
 
-    identifier = (data.get("identifier") or "").strip()
-    reset_token = (data.get("reset_token") or "").strip()
-    new_password = data.get("new_password") or ""
+    identifier = _extract_identifier(data)
+    reset_token = (
+        (data.get("reset_token") or "")
+        or (data.get("token") or "")
+    ).strip()
+    new_password = (
+        data.get("new_password")
+        or data.get("password")
+        or ""
+    )
 
     if not identifier or not reset_token or not new_password:
-        return jsonify({"error": "identifier, reset_token and new_password are required"}), 400
+        return jsonify({
+            "error": "identifier, reset_token and new_password are required"
+        }), 400
 
     if len(new_password) < 6:
         return jsonify({"error": "new_password must be at least 6 characters"}), 400
@@ -226,7 +268,7 @@ def reset_password():
             return jsonify({"error": "User not found"}), 404
 
         expected_hash = user.get("password_reset_token_hash")
-        expires_at = user.get("password_reset_token_expires_at")
+        expires_at = _parse_expiry_datetime(user.get("password_reset_token_expires_at"))
         if not expected_hash or not expires_at:
             return jsonify({"error": "No active reset token. Request forgot password first"}), 400
 

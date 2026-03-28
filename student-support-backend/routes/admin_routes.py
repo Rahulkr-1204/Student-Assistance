@@ -42,8 +42,41 @@ admin_routes = Blueprint("admin_routes", __name__)
 ADMIN_RESET_TOKEN_TTL_MINUTES = 20
 
 
+def _generate_reset_code():
+    return f"{secrets.randbelow(1000000):06d}"
+
+
 def _hash_reset_token(raw_token):
     return hashlib.sha256((raw_token or "").encode("utf-8")).hexdigest()
+
+
+def _extract_admin_identifier(data):
+    return (
+        (data.get("identifier") or "")
+        or (data.get("username") or "")
+        or (data.get("email") or "")
+    ).strip()
+
+
+def _parse_expiry_datetime(value):
+    if isinstance(value, datetime):
+        return value
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+
+        normalized = text.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is not None:
+                return parsed.replace(tzinfo=None)
+            return parsed
+        except ValueError:
+            return None
+
+    return None
 
 
 def _parse_pagination(default_limit=20, max_limit=200):
@@ -226,6 +259,17 @@ def _slot_doc_to_response(slot_doc, source="slots"):
     }
 
 
+def _active_slot_query(extra=None):
+    query = {
+        "$and": [
+            {"$or": [{"is_active": True}, {"is_active": {"$exists": False}}]},
+        ]
+    }
+    if extra:
+        query["$and"].append(extra)
+    return query
+
+
 def _find_slot_by_id(slot_id):
     if not ObjectId.is_valid(str(slot_id)):
         return None, None
@@ -262,13 +306,13 @@ def _times_overlap(start_a, end_a, start_b, end_b):
 def _get_all_active_slots():
     slots = list(
         counseling_slots_collection.find(
-            {"is_active": True},
+            _active_slot_query(),
             {"date": 1, "start_time": 1, "end_time": 1, "mode": 1, "counselor": 1, "is_active": 1},
         )
     )
     fallback_slots = list(
         counseling_collection.find(
-            {"doc_type": "slot", "is_active": True},
+            _active_slot_query({"doc_type": "slot"}),
             {"date": 1, "start_time": 1, "end_time": 1, "mode": 1, "counselor": 1, "is_active": 1},
         )
     )
@@ -567,9 +611,9 @@ def admin_login():
 @admin_routes.route("/admin/forgot-password", methods=["POST"])
 def admin_forgot_password():
     data = request.get_json(silent=True) or {}
-    identifier = (data.get("identifier") or "").strip()
+    identifier = _extract_admin_identifier(data)
     if not identifier:
-        return jsonify({"error": "identifier is required"}), 400
+        return jsonify({"error": "identifier, username, or email is required"}), 400
 
     try:
         admin = admins_collection.find_one({
@@ -581,7 +625,7 @@ def admin_forgot_password():
         if not admin:
             return jsonify({"error": "Admin not found"}), 404
 
-        reset_token = secrets.token_urlsafe(24)
+        reset_token = _generate_reset_code()
         token_hash = _hash_reset_token(reset_token)
         expires_at = datetime.utcnow() + timedelta(minutes=ADMIN_RESET_TOKEN_TTL_MINUTES)
 
@@ -632,9 +676,16 @@ def admin_forgot_password():
 @admin_routes.route("/admin/reset-password", methods=["POST"])
 def admin_reset_password():
     data = request.get_json(silent=True) or {}
-    identifier = (data.get("identifier") or "").strip()
-    reset_token = (data.get("reset_token") or "").strip()
-    new_password = data.get("new_password") or ""
+    identifier = _extract_admin_identifier(data)
+    reset_token = (
+        (data.get("reset_token") or "")
+        or (data.get("token") or "")
+    ).strip()
+    new_password = (
+        data.get("new_password")
+        or data.get("password")
+        or ""
+    )
 
     if not identifier or not reset_token or not new_password:
         return jsonify({"error": "identifier, reset_token and new_password are required"}), 400
@@ -652,7 +703,7 @@ def admin_reset_password():
             return jsonify({"error": "Admin not found"}), 404
 
         expected_hash = admin.get("password_reset_token_hash")
-        expires_at = admin.get("password_reset_token_expires_at")
+        expires_at = _parse_expiry_datetime(admin.get("password_reset_token_expires_at"))
         if not expected_hash or not expires_at:
             return jsonify({"error": "No active reset token. Request forgot password first"}), 400
         if datetime.utcnow() > expires_at:
@@ -920,11 +971,12 @@ def admin_get_counseling_slots():
     try:
         date_filter = (request.args.get("date") or "").strip()
         include_inactive = str(request.args.get("include_inactive", "false")).lower() == "true"
-        query = {}
-        if not include_inactive:
-            query["is_active"] = True
+        query = {} if include_inactive else _active_slot_query()
         if date_filter:
-            query["date"] = date_filter
+            if include_inactive:
+                query["date"] = date_filter
+            else:
+                query["$and"].append({"date": date_filter})
 
         slots_primary = list(
             counseling_slots_collection.find(
@@ -932,11 +984,12 @@ def admin_get_counseling_slots():
                 {"date": 1, "start_time": 1, "end_time": 1, "mode": 1, "counselor": 1, "is_active": 1},
             ).sort("date", 1).sort("start_time", 1)
         )
-        fallback_query = {"doc_type": "slot"}
-        if not include_inactive:
-            fallback_query["is_active"] = True
+        fallback_query = {"doc_type": "slot"} if include_inactive else _active_slot_query({"doc_type": "slot"})
         if date_filter:
-            fallback_query["date"] = date_filter
+            if include_inactive:
+                fallback_query["date"] = date_filter
+            else:
+                fallback_query["$and"].append({"date": date_filter})
         slots_fallback = list(
             counseling_collection.find(
                 fallback_query,
@@ -1072,18 +1125,20 @@ def admin_get_counseling_bookings():
             query["$or"] = [
                 {"student": search_re},
                 {"message": search_re},
+                {"booking_code": search_re},
             ]
 
         total = counseling_collection.count_documents(query)
         bookings = list(
             counseling_collection.find(
                 query,
-                {"student": 1, "message": 1, "preferred_date": 1, "status": 1, "scheduled_slot_id": 1, "updated_at": 1, "created_at": 1},
+                {"booking_code": 1, "student": 1, "message": 1, "preferred_date": 1, "status": 1, "scheduled_slot_id": 1, "updated_at": 1, "created_at": 1},
             ).sort("created_at", -1).skip(skip).limit(limit)
         )
 
         for booking in bookings:
             booking["id"] = str(booking.pop("_id"))
+            booking["booking_code"] = booking.get("booking_code") or booking["id"]
             slot_id = booking.get("scheduled_slot_id")
             booking["scheduled_slot_id"] = str(slot_id) if slot_id else None
             if slot_id:

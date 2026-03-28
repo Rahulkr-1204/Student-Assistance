@@ -254,7 +254,11 @@ function Sidebar({
       }
       setForm((prev) => ({ ...prev, message: "", preferred_date: "", slot_id: "" }));
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to submit counseling request");
+      setError(
+        err.response?.data?.details ||
+        err.response?.data?.error ||
+        "Failed to submit counseling request"
+      );
     } finally {
       setBookingLoading(false);
     }
@@ -388,6 +392,9 @@ function Sidebar({
                     </option>
                   ))}
                 </select>
+                {!loadingSlots && slots.length === 0 && (
+                  <p className="side-note">No active counseling slots are available right now.</p>
+                )}
 
                 <button type="submit" disabled={bookingLoading}>
                   {bookingLoading ? "Submitting..." : "Book Counseling"}
@@ -396,15 +403,16 @@ function Sidebar({
 
               {bookingInfo?.booking_id && (
                 <div className="side-card success">
-                  <p><strong>Booking ID:</strong> {bookingInfo.booking_id}</p>
+                  <p><strong>Booking Code:</strong> {bookingInfo.booking_id}</p>
                   <p><strong>Status:</strong> {bookingInfo.status || "pending"}</p>
+                  <p className="side-note">This code is also sent to your email.</p>
                 </div>
               )}
 
               <h4>Check Booking Status</h4>
               <div className="status-checker">
                 <input
-                  placeholder="Enter booking ID"
+                  placeholder="Enter 6-character booking code"
                   value={bookingIdInput}
                   onChange={(e) => setBookingIdInput(e.target.value)}
                 />
@@ -415,6 +423,7 @@ function Sidebar({
 
               {statusInfo && (
                 <div className="side-card">
+                  <p><strong>Booking Code:</strong> {statusInfo.booking_code || "-"}</p>
                   <p><strong>Status:</strong> {statusInfo.status || "pending"}</p>
                   {statusInfo.scheduled_slot ? (
                     <>

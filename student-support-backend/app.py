@@ -1,21 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
-import requests
 from dotenv import load_dotenv
 from pathlib import Path
 
 # Load env variables
 load_dotenv(Path(__file__).resolve().parent / ".env")
-
-# Telegram config
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
-TELEGRAM_API_URL = (
-    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    if TELEGRAM_BOT_TOKEN
-    else None
-)
 
 # Import your modules
 from routes.auth_routes import auth_routes
@@ -37,6 +27,7 @@ app = Flask(__name__)
 allowed_origins = {
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://192.168.31.211:5173",
     "https://student-assistance-rahul.vercel.app",
     "https://student-assistance-ff0uw1u9r-rahul-kumars-projects-e5816ae5.vercel.app",
 }
@@ -96,88 +87,5 @@ def chat():
         return jsonify(result), status
 
     return jsonify(result), status
-
-
-def _is_webhook_secret_valid(incoming_secret):
-    # Allow unset or placeholder secret for local development.
-    if not TELEGRAM_WEBHOOK_SECRET or TELEGRAM_WEBHOOK_SECRET == "your_secure_webhook_secret_here":
-        return True
-    return incoming_secret == TELEGRAM_WEBHOOK_SECRET
-
-
-def _send_telegram_message(chat_id, text):
-    if not TELEGRAM_API_URL:
-        return {
-            "ok": False,
-            "error": "TELEGRAM_BOT_TOKEN is missing. Cannot send Telegram reply."
-        }
-
-    try:
-        telegram_response = requests.post(
-            TELEGRAM_API_URL,
-            json={"chat_id": chat_id, "text": text},
-            timeout=10,
-        )
-        try:
-            telegram_json = telegram_response.json()
-        except ValueError:
-            telegram_json = {"description": telegram_response.text}
-
-        if telegram_response.ok and telegram_json.get("ok", False):
-            return {"ok": True}
-
-        return {
-            "ok": False,
-            "error": telegram_json.get("description", "Telegram API sendMessage failed"),
-            "status_code": telegram_response.status_code,
-        }
-    except requests.RequestException as e:
-        return {"ok": False, "error": str(e)}
-
-
-@app.route("/telegram/webhook", methods=["POST"])
-def telegram_webhook():
-    incoming_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if not _is_webhook_secret_valid(incoming_secret):
-        return jsonify({"ok": False, "error": "invalid webhook secret"}), 403
-
-    data = request.get_json(silent=True) or {}
-    print("Telegram Update:", data)
-
-    if not data:
-        return jsonify({"ok": False, "error": "no data"}), 400
-
-    incoming_message = data.get("message") or data.get("edited_message")
-    if not incoming_message:
-        return jsonify({"ok": True, "processed": 0, "message": "unsupported update type"}), 200
-
-    chat_id = ((incoming_message.get("chat") or {}).get("id"))
-    text = (incoming_message.get("text") or "").strip()
-
-    if not chat_id:
-        return jsonify({"ok": False, "error": "missing chat id"}), 400
-
-    if not text:
-        return jsonify({"ok": True, "processed": 0, "message": "no text"}), 200
-
-    try:
-        result = process_chat_message(text, user=str(chat_id), save_log=True)
-        reply = result.get("response", "Sorry, I didn't understand that.")
-    except Exception as e:
-        print("Telegram processing error:", e)
-        reply = "Server error. Try again later."
-
-    send_result = _send_telegram_message(chat_id, reply)
-    if not send_result.get("ok"):
-        print("Telegram send error:", send_result)
-        return jsonify({
-            "ok": False,
-            "processed": 0,
-            "error": send_result.get("error"),
-        }), 502
-
-    return jsonify({"ok": True, "processed": 1, "reply": reply}), 200
-
-
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

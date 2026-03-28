@@ -82,15 +82,15 @@ def send_password_reset_email(recipient_email, reset_token, expires_in_minutes, 
         else:
             reset_link = f"{base}/admin/login"
 
-    subject = f"{audience_name} Password Reset Token"
+    subject = f"{audience_name} Password Reset Code"
     body_lines = [
         f"Hello {audience_name},",
         "",
         "We received a password reset request for your account.",
-        f"Reset token: {reset_token}",
-        f"This token will expire in {expires_in_minutes} minutes.",
+        f"Your 6-digit reset code is: {reset_token}",
+        f"This code will expire in {expires_in_minutes} minutes.",
         "",
-        "Use this token in the Forgot Password section of the login page.",
+        "Enter this code in the Forgot Password section of the login page.",
     ]
     if reset_link:
         body_lines.extend(["", f"Login page: {reset_link}"])
@@ -110,5 +110,40 @@ def send_smtp_test_email(recipient_email, requested_by="admin"):
     return _send_email(
         recipient_email=recipient_email,
         subject="SMTP Test Email - AI Student Support",
+        body_lines=body_lines,
+    )
+
+
+def send_counseling_booking_email(recipient_email, booking_code, status, scheduled_slot=None):
+    body_lines = [
+        "Hello Student,",
+        "",
+        "Your counseling request has been submitted successfully.",
+        f"Your booking code is: {booking_code}",
+        f"Current status: {status}",
+    ]
+
+    if scheduled_slot:
+        body_lines.extend(
+            [
+                "",
+                "Scheduled slot details:",
+                f"Date: {scheduled_slot.get('date') or '-'}",
+                f"Time: {scheduled_slot.get('start_time') or '-'} - {scheduled_slot.get('end_time') or '-'}",
+                f"Mode: {scheduled_slot.get('mode') or 'in_person'}",
+                f"Counselor: {scheduled_slot.get('counselor') or 'Counselor'}",
+            ]
+        )
+
+    body_lines.extend(
+        [
+            "",
+            "Please keep this booking code safe. You can use it to check your counseling booking status later.",
+        ]
+    )
+
+    return _send_email(
+        recipient_email=recipient_email,
+        subject="Counseling Booking Confirmation",
         body_lines=body_lines,
     )

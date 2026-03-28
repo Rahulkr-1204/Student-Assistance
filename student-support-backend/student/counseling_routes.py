@@ -1,10 +1,29 @@
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
 from datetime import datetime
+import secrets
+import string
 
 from database import counseling_collection, counseling_slots_collection, stress_resources_collection
+from services.password_reset_delivery import send_counseling_booking_email, email_delivery_ready
 
 counseling_routes = Blueprint("counseling_routes", __name__)
+
+BOOKING_CODE_LENGTH = 6
+BOOKING_CODE_ALPHABET = string.ascii_uppercase + string.digits
+
+
+def _active_slot_query(extra=None):
+    query = {
+        "$and": [
+            {"$or": [{"is_active": True}, {"is_active": {"$exists": False}}]},
+        ]
+    }
+
+    if extra:
+        query["$and"].append(extra)
+
+    return query
 
 
 @counseling_routes.route("/stress-resources", methods=["GET"])
@@ -98,23 +117,67 @@ def _has_counselor_booking_conflict(slot_doc):
     return False
 
 
+def _generate_booking_code():
+    return "".join(secrets.choice(BOOKING_CODE_ALPHABET) for _ in range(BOOKING_CODE_LENGTH))
+
+
+def _create_unique_booking_code():
+    for _ in range(20):
+        code = _generate_booking_code()
+        existing = counseling_collection.find_one(
+            {"booking_code": {"$regex": f"^{code}$", "$options": "i"}, "doc_type": {"$ne": "slot"}},
+            {"_id": 1},
+        )
+        if not existing:
+            return code
+    raise RuntimeError("Failed to generate a unique booking code")
+
+
+def _serialize_slot(slot_doc):
+    if not slot_doc:
+        return None
+    return {
+        "id": str(slot_doc.get("_id")),
+        "date": slot_doc.get("date"),
+        "start_time": slot_doc.get("start_time"),
+        "end_time": slot_doc.get("end_time"),
+        "mode": slot_doc.get("mode"),
+        "counselor": slot_doc.get("counselor"),
+    }
+
+
+def _find_booking_by_identifier(booking_identifier):
+    raw = (booking_identifier or "").strip()
+    if not raw:
+        return None
+
+    if ObjectId.is_valid(raw):
+        booking = counseling_collection.find_one({"_id": ObjectId(raw), "doc_type": {"$ne": "slot"}})
+        if booking:
+            return booking
+
+    return counseling_collection.find_one(
+        {"booking_code": {"$regex": f"^{raw}$", "$options": "i"}, "doc_type": {"$ne": "slot"}}
+    )
+
+
 @counseling_routes.route("/counseling-slots", methods=["GET"])
 def counseling_slots():
     try:
         date_filter = (request.args.get("date") or "").strip()
 
-        query = {"is_active": True}
+        query = _active_slot_query()
         if date_filter:
-            query["date"] = date_filter
+            query["$and"].append({"date": date_filter})
 
         slots_primary = list(
             counseling_slots_collection.find(query, {"_id": 1, "date": 1, "start_time": 1, "end_time": 1, "mode": 1, "counselor": 1})
             .sort("date", 1)
             .sort("start_time", 1)
         )
-        fallback_query = {"doc_type": "slot", "is_active": True}
+        fallback_query = _active_slot_query({"doc_type": "slot"})
         if date_filter:
-            fallback_query["date"] = date_filter
+            fallback_query["$and"].append({"date": date_filter})
         slots_fallback = list(
             counseling_collection.find(
                 fallback_query,
@@ -146,44 +209,58 @@ def counseling_request():
     if not email or not message:
         return jsonify({"error": "email and message are required"}), 400
 
-    scheduled_slot = None
-    if slot_id:
-        if not ObjectId.is_valid(slot_id):
-            return jsonify({"error": "Invalid slot_id"}), 400
-
-        scheduled_slot = _find_slot_by_id(slot_id)
-        if not scheduled_slot:
-            return jsonify({"error": "Selected slot not found or inactive"}), 404
-        if scheduled_slot.get("is_active") is False:
-            return jsonify({"error": "Selected slot is inactive"}), 409
-
-        already_booked = counseling_collection.find_one({
-            "scheduled_slot_id": ObjectId(slot_id),
-            "status": "scheduled",
-            "doc_type": {"$ne": "slot"},
-        })
-        if already_booked:
-            return jsonify({"error": "Selected slot is already booked"}), 409
-
-        if _has_counselor_booking_conflict(scheduled_slot):
-            return jsonify({"error": "Conflict: counselor already has another student scheduled in this time range"}), 409
-
-    request_data = {
-        "student": email,
-        "message": message,
-        "preferred_date": preferred_date or None,
-        "status": "scheduled" if scheduled_slot else "pending",
-        "scheduled_slot_id": ObjectId(slot_id) if scheduled_slot else None,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-    }
-
     try:
+        scheduled_slot = None
+        if slot_id:
+            if not ObjectId.is_valid(slot_id):
+                return jsonify({"error": "Invalid slot_id"}), 400
+
+            scheduled_slot = _find_slot_by_id(slot_id)
+            if not scheduled_slot:
+                return jsonify({"error": "Selected slot not found or inactive"}), 404
+            if scheduled_slot.get("is_active") is False:
+                return jsonify({"error": "Selected slot is inactive"}), 409
+
+            already_booked = counseling_collection.find_one({
+                "scheduled_slot_id": ObjectId(slot_id),
+                "status": "scheduled",
+                "doc_type": {"$ne": "slot"},
+            })
+            if already_booked:
+                return jsonify({"error": "Selected slot is already booked"}), 409
+
+            if _has_counselor_booking_conflict(scheduled_slot):
+                return jsonify({"error": "Conflict: counselor already has another student scheduled in this time range"}), 409
+
+        request_data = {
+            "booking_code": _create_unique_booking_code(),
+            "student": email,
+            "message": message,
+            "preferred_date": preferred_date or None,
+            "status": "scheduled" if scheduled_slot else "pending",
+            "scheduled_slot_id": ObjectId(slot_id) if scheduled_slot else None,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+
         result = counseling_collection.insert_one(request_data)
+        delivery = send_counseling_booking_email(
+            recipient_email=email,
+            booking_code=request_data["booking_code"],
+            status=request_data["status"],
+            scheduled_slot=_serialize_slot(scheduled_slot),
+        )
         return jsonify({
             "message": "Counseling request submitted successfully",
-            "booking_id": str(result.inserted_id),
+            "booking_id": request_data["booking_code"],
+            "booking_code": request_data["booking_code"],
             "status": request_data["status"],
+            "delivery": {
+                "sent": bool(delivery.get("sent")),
+                "channel": "email",
+                "email_configured": email_delivery_ready(),
+                "reason": delivery.get("reason"),
+            },
         }), 201
     except Exception as e:
         return jsonify({"error": "Failed to submit counseling request", "details": str(e)}), 503
@@ -191,16 +268,14 @@ def counseling_request():
 
 @counseling_routes.route("/counseling-booking-status/<booking_id>", methods=["GET"])
 def counseling_booking_status(booking_id):
-    if not ObjectId.is_valid(booking_id):
-        return jsonify({"error": "Invalid booking id"}), 400
-
     try:
-        booking = counseling_collection.find_one({"_id": ObjectId(booking_id), "doc_type": {"$ne": "slot"}})
+        booking = _find_booking_by_identifier(booking_id)
         if not booking:
             return jsonify({"error": "Booking not found"}), 404
 
         response = {
             "id": str(booking.get("_id")),
+            "booking_code": booking.get("booking_code") or str(booking.get("_id")),
             "student": booking.get("student"),
             "message": booking.get("message"),
             "preferred_date": booking.get("preferred_date"),
@@ -212,14 +287,7 @@ def counseling_booking_status(booking_id):
         if scheduled_slot_id and ObjectId.is_valid(str(scheduled_slot_id)):
             slot = _find_slot_by_id(scheduled_slot_id)
             if slot:
-                response["scheduled_slot"] = {
-                    "id": str(slot.get("_id")),
-                    "date": slot.get("date"),
-                    "start_time": slot.get("start_time"),
-                    "end_time": slot.get("end_time"),
-                    "mode": slot.get("mode"),
-                    "counselor": slot.get("counselor"),
-                }
+                response["scheduled_slot"] = _serialize_slot(slot)
 
         return jsonify(response)
     except Exception as e:

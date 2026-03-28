@@ -1,171 +1,141 @@
 #!/usr/bin/env python3
 """
-Quick Telegram Webhook Setup for Local Testing
-Sets up webhook for local development using ngrok or direct localhost
+Quick Telegram webhook setup helper.
+Uses one canonical webhook path: /api/integrations/telegram/webhook
 """
 
-import os
 import json
+import os
 import urllib.request
-import urllib.error
+
 from dotenv import load_dotenv
 
-# Load environment variables
+
 load_dotenv()
 
-def setup_local_webhook():
-    """Set up webhook for local testing"""
+CANONICAL_WEBHOOK_PATH = "/api/integrations/telegram/webhook"
+LOCAL_WEBHOOK_URL = f"http://localhost:5000{CANONICAL_WEBHOOK_PATH}"
 
+
+def set_webhook(webhook_url):
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     if not bot_token:
-        print("❌ TELEGRAM_BOT_TOKEN not found in .env")
+        print("TELEGRAM_BOT_TOKEN not found in .env")
         return False
 
-    print("🔧 Setting up Telegram webhook for local testing...")
-    print("\nChoose your setup method:")
-    print("1. Use ngrok tunnel (recommended for testing)")
-    print("2. Use localhost directly (limited functionality)")
-    print("3. Enter custom webhook URL")
-
-    choice = input("\nEnter choice (1-3): ").strip()
-
-    if choice == "1":
-        print("\n📋 To use ngrok:")
-        print("1. Download ngrok from https://ngrok.com/download")
-        print("2. Run: ngrok http 5000")
-        print("3. Copy the HTTPS URL (e.g., https://abc123.ngrok.io)")
-        print("4. Run this script again and choose option 3")
-        return False
-
-    elif choice == "2":
-        webhook_url = "http://localhost:5000/api/integrations/telegram/webhook"
-        print(f"⚠️  Using localhost URL: {webhook_url}")
-        print("Note: This won't work for external Telegram messages")
-
-    elif choice == "3":
-        webhook_url = input("Enter your webhook URL: ").strip()
-        if not webhook_url:
-            print("❌ No URL provided")
-            return False
-    else:
-        print("❌ Invalid choice")
-        return False
-
-    # Set the webhook
     try:
         url = f"https://api.telegram.org/bot{bot_token}/setWebhook"
         payload = {
             "url": webhook_url,
             "max_connections": 100,
-            "allowed_updates": ["message", "edited_message"]
+            "allowed_updates": ["message", "edited_message"],
         }
 
-        # Add secret token if available
         secret_token = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
         if secret_token and secret_token != "your_secure_webhook_secret_here":
             payload["secret_token"] = secret_token
-            print(f"🔒 Using webhook secret token")
+            print("Using configured webhook secret")
 
         req = urllib.request.Request(
             url,
-            data=json.dumps(payload).encode('utf-8'),
-            method='POST'
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
         )
-        req.add_header('Content-Type', 'application/json')
+        req.add_header("Content-Type", "application/json")
 
-        print(f"📡 Setting webhook to: {webhook_url}")
-
+        print(f"Setting Telegram webhook to: {webhook_url}")
         with urllib.request.urlopen(req, timeout=15) as response:
-            data = json.loads(response.read().decode('utf-8'))
+            data = json.loads(response.read().decode("utf-8"))
 
-        if data.get("ok"):
-            print("✅ Webhook set successfully!")
-
-            # Verify the webhook
-            info_url = f"https://api.telegram.org/bot{bot_token}/getWebhookInfo"
-            with urllib.request.urlopen(info_url, timeout=10) as info_response:
-                info_data = json.loads(info_response.read().decode('utf-8'))
-
-            if info_data.get("ok"):
-                webhook_info = info_data.get("result", {})
-                print(f"📊 Webhook Info:")
-                print(f"   URL: {webhook_info.get('url', 'Not set')}")
-                print(f"   Pending updates: {webhook_info.get('pending_update_count', 0)}")
-
-            return True
-        else:
-            error_msg = data.get("description", "Unknown error")
-            print(f"❌ Failed to set webhook: {error_msg}")
+        if not data.get("ok"):
+            print(f"Failed to set webhook: {data.get('description', 'Unknown error')}")
             return False
 
+        print("Webhook set successfully")
+        info_url = f"https://api.telegram.org/bot{bot_token}/getWebhookInfo"
+        with urllib.request.urlopen(info_url, timeout=10) as info_response:
+            info_data = json.loads(info_response.read().decode("utf-8"))
+
+        if info_data.get("ok"):
+            webhook_info = info_data.get("result", {})
+            print(f"Telegram webhook URL: {webhook_info.get('url', 'Not set')}")
+            print(f"Pending updates: {webhook_info.get('pending_update_count', 0)}")
+            if webhook_info.get("last_error_message"):
+                print(f"Last Telegram error: {webhook_info['last_error_message']}")
+
+        return True
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"Error while setting webhook: {e}")
         return False
 
-def test_webhook():
-    """Test the webhook with a sample message"""
 
-    print("\n🧪 Testing webhook with sample message...")
-
-    # Sample Telegram message payload
-    test_payload = {
+def test_local_handler():
+    print("\nTesting local webhook handler with mock data...")
+    payload = {
         "message": {
             "chat": {"id": 123456789, "type": "private"},
             "from": {"id": 123456789, "first_name": "Test", "username": "testuser"},
             "text": "Hello! I need help with admissions",
-            "date": 1640995200
         }
     }
 
     try:
-        url = "http://localhost:5000/api/integrations/telegram/webhook"
         req = urllib.request.Request(
-            url,
-            data=json.dumps(test_payload).encode('utf-8'),
-            method='POST'
+            LOCAL_WEBHOOK_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
         )
-        req.add_header('Content-Type', 'application/json')
+        req.add_header("Content-Type", "application/json")
+        req.add_header("X-Webhook-Test", "1")
+
+        secret_token = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+        if secret_token and secret_token != "your_secure_webhook_secret_here":
+            req.add_header("X-Telegram-Bot-Api-Secret-Token", secret_token)
 
         with urllib.request.urlopen(req, timeout=10) as response:
-            response_data = json.loads(response.read().decode('utf-8'))
+            data = json.loads(response.read().decode("utf-8"))
 
-        if response_data.get("ok"):
-            print("✅ Webhook test successful!")
-            print(f"🤖 Bot responded to test message")
+        if data.get("ok"):
+            print("Local Telegram handler works")
+            print(f"Reply preview: {data.get('reply_preview', '')}")
             return True
-        else:
-            print("⚠️  Webhook responded but may have issues")
-            return False
 
+        print("Local Telegram handler returned an unexpected response")
+        return False
     except Exception as e:
-        print(f"❌ Webhook test failed: {str(e)}")
-        print("💡 Make sure your backend server is running (python app.py)")
+        print(f"Local webhook test failed: {e}")
+        print("Make sure your backend server is running on http://localhost:5000")
         return False
 
+
 def main():
-    print("🚀 Quick Telegram Webhook Setup")
+    print("Quick Telegram Webhook Setup")
     print("=" * 50)
+    print("1. Set webhook using a public HTTPS base URL")
+    print("2. Test local webhook handler only")
 
-    # Setup webhook
-    success = setup_local_webhook()
+    choice = input("\nEnter choice (1-2): ").strip()
 
-    if success:
-        print("\n" + "=" * 50)
-        print("🎉 WEBHOOK SETUP COMPLETE!")
-        print("=" * 50)
+    if choice == "1":
+        base_url = input("Enter your public HTTPS base URL (for example, https://abc123.ngrok-free.app): ").strip().rstrip("/")
+        if not base_url.startswith("https://"):
+            print("Telegram requires a public HTTPS URL.")
+            return
 
-        # Test webhook if using localhost
-        if "localhost" in str(success):
-            test_webhook()
+        webhook_url = f"{base_url}{CANONICAL_WEBHOOK_PATH}"
+        if set_webhook(webhook_url):
+            print("\nNext steps:")
+            print("1. Keep your backend running and reachable at that public URL")
+            print("2. Send a message to your Telegram bot")
+            print("3. Check backend logs if delivery still fails")
+        return
 
-        print("\n📱 Next Steps:")
-        print("1. Start your backend: python app.py")
-        print("2. Send a message to your bot on Telegram")
-        print("3. Check the backend logs for incoming messages")
-        print("4. Test responses from the bot")
+    if choice == "2":
+        test_local_handler()
+        return
 
-        print("\n🔗 Your bot username: @Student_Support_231FA04G24_bot")
-        print("💬 Try sending: 'Hello' or 'admissions help'")
+    print("Invalid choice")
+
 
 if __name__ == "__main__":
     main()

@@ -18,6 +18,21 @@ function Login() {
   const [forgotMessage, setForgotMessage] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
 
+  const toggleForgotPassword = () => {
+    setShowForgot((previous) => {
+      const next = !previous;
+      if (next && !forgotIdentifier.trim() && identifier.trim()) {
+        setForgotIdentifier(identifier.trim());
+      }
+      if (!next) {
+        setForgotMessage("");
+        setResetToken("");
+        setNewPassword("");
+      }
+      return next;
+    });
+  };
+
   const handleLogin = async () => {
   console.log("LOGIN CLICKED"); // 🔥 DEBUG
 
@@ -64,11 +79,11 @@ function Login() {
       const res = await forgotPassword(forgotIdentifier.trim());
       if (res.data?.reset_token) {
         setForgotMessage(
-          `Reset token: ${res.data.reset_token} (valid for ${res.data?.expires_in_minutes || 20} minutes)`
+          `Your 6-digit reset code is ${res.data.reset_token}. It is valid for ${res.data?.expires_in_minutes || 20} minutes. Enter it below to set a new password.`
         );
       } else {
         setForgotMessage(
-          res.data?.message || "If your account exists, a reset token has been sent to your email."
+          res.data?.message || "If your account exists, a 6-digit reset code has been sent to your email."
         );
       }
     } catch (err) {
@@ -83,6 +98,10 @@ function Login() {
       setForgotMessage("Enter identifier, reset token and new password");
       return;
     }
+    if (newPassword.trim().length < 6) {
+      setForgotMessage("New password must be at least 6 characters");
+      return;
+    }
 
     try {
       setForgotLoading(true);
@@ -93,8 +112,10 @@ function Login() {
         new_password: newPassword,
       });
       setForgotMessage(res.data?.message || "Password reset successful");
+      setPassword("");
       setResetToken("");
       setNewPassword("");
+      setIdentifier(forgotIdentifier.trim());
     } catch (err) {
       setForgotMessage(getApiErrorMessage(err, "Password reset failed"));
     } finally {
@@ -130,7 +151,7 @@ function Login() {
             {loading ? "Logging in..." : "Login"}
           </button>
 
-          <button type="button" className="auth-link-secondary" onClick={() => setShowForgot((p) => !p)}>
+          <button type="button" className="auth-link-secondary" onClick={toggleForgotPassword}>
             {showForgot ? "Hide Forgot Password" : "Forgot Password?"}
           </button>
 
@@ -143,12 +164,12 @@ function Login() {
               />
               <div className="forgot-actions">
                 <button type="button" onClick={handleForgotPassword} disabled={forgotLoading}>
-                  {forgotLoading ? "Processing..." : "Get Reset Token"}
+                  {forgotLoading ? "Processing..." : "Get Reset Code"}
                 </button>
               </div>
 
               <input
-                placeholder="Reset Token"
+                placeholder="6-digit Reset Code"
                 value={resetToken}
                 onChange={(e) => setResetToken(e.target.value)}
               />
@@ -158,6 +179,7 @@ function Login() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
+              <p className="auth-hint">New password must be at least 6 characters.</p>
               <div className="forgot-actions">
                 <button type="button" onClick={handleResetPassword} disabled={forgotLoading}>
                   {forgotLoading ? "Processing..." : "Reset Password"}

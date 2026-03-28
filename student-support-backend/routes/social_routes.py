@@ -230,6 +230,18 @@ def telegram_receive_webhook():
 
     user_ref = user_obj.get("username") or user_obj.get("id") or str(chat_id)
     result = process_chat_message(text, user=f"telegram:{user_ref}", save_log=True)
+    if request.headers.get("X-Webhook-Test") == "1":
+        return jsonify(
+            {
+                "ok": True,
+                "processed": 1,
+                "chat_id": chat_id,
+                "response_route": result.get("response_route"),
+                "test_mode": True,
+                "reply_preview": result.get("response", ""),
+            }
+        ), 200
+
     sent = _send_telegram_text(chat_id, result.get("response", ""))
     if not sent.get("sent"):
         return jsonify(
