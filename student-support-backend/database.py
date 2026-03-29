@@ -26,9 +26,9 @@ MONGO_URI = normalize_mongo_uri(os.getenv("MONGO_URI"))
 MONGO_URI_FALLBACK = normalize_mongo_uri(os.getenv("MONGO_URI_FALLBACK"))
 MONGO_URI_LOCAL = normalize_mongo_uri(os.getenv("MONGO_URI_LOCAL"))
 DB_NAME = os.getenv("MONGO_DB_NAME", "Student-chat-bot-data")
-SERVER_SELECTION_TIMEOUT_MS = int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "15000"))
-CONNECT_TIMEOUT_MS = int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "10000"))
-SOCKET_TIMEOUT_MS = int(os.getenv("MONGO_SOCKET_TIMEOUT_MS", "10000"))
+SERVER_SELECTION_TIMEOUT_MS = int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000"))
+CONNECT_TIMEOUT_MS = int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "3000"))
+SOCKET_TIMEOUT_MS = int(os.getenv("MONGO_SOCKET_TIMEOUT_MS", "5000"))
 
 _db = None
 _client = None

@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 import urllib.request
 import urllib.error
 
@@ -101,6 +102,16 @@ def _send_instagram_text(recipient_id, text):
         return {"sent": False, "reason": "http_error", "details": error_body}
     except Exception as e:
         return {"sent": False, "reason": "error", "details": str(e)}
+
+
+def _process_and_send_telegram_reply(chat_id, user_ref, text):
+    try:
+        result = process_chat_message(text, user=f"telegram:{user_ref}", save_log=True)
+        sent = _send_telegram_text(chat_id, result.get("response", ""))
+        if not sent.get("sent"):
+            print(f"[telegram] Reply delivery failed for chat {chat_id}: {sent}")
+    except Exception as e:
+        print(f"[telegram] Background reply processing failed for chat {chat_id}: {e}")
 
 
 @social_routes.route("/integrations/whatsapp/webhook", methods=["GET"])
@@ -229,8 +240,8 @@ def telegram_receive_webhook():
         return jsonify({"ok": True, "processed": 0}), 200
 
     user_ref = user_obj.get("username") or user_obj.get("id") or str(chat_id)
-    result = process_chat_message(text, user=f"telegram:{user_ref}", save_log=True)
     if request.headers.get("X-Webhook-Test") == "1":
+        result = process_chat_message(text, user=f"telegram:{user_ref}", save_log=True)
         return jsonify(
             {
                 "ok": True,
@@ -242,24 +253,18 @@ def telegram_receive_webhook():
             }
         ), 200
 
-    sent = _send_telegram_text(chat_id, result.get("response", ""))
-    if not sent.get("sent"):
-        return jsonify(
-            {
-                "ok": False,
-                "processed": 0,
-                "chat_id": chat_id,
-                "response_route": result.get("response_route"),
-                "delivery": sent,
-            }
-        ), 502
+    worker = threading.Thread(
+        target=_process_and_send_telegram_reply,
+        args=(chat_id, user_ref, text),
+        daemon=True,
+    )
+    worker.start()
 
     return jsonify(
         {
             "ok": True,
             "processed": 1,
             "chat_id": chat_id,
-            "response_route": result.get("response_route"),
-            "delivery": sent,
+            "queued": True,
         }
     ), 200

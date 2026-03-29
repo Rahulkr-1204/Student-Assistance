@@ -7,6 +7,7 @@ from utils.sentiment_analyzer import detect_sentiment
 
 
 SUPPORTED_LANGUAGES = ["en", "hi", "te", "ta", "kn"]
+TRANSLATION_BYPASS_PREFIXES = ("telegram:",)
 
 
 def translate_to_en(text, source_lang):
@@ -24,6 +25,18 @@ def _get_chatbot_response(*args, **kwargs):
     return get_response(*args, **kwargs)
 
 
+def warm_chatbot_model():
+    # Import the chatbot module during startup so the first user message does not pay model init cost.
+    from chatbot_model import get_response
+
+    return get_response
+
+
+def _should_bypass_translation(user_identifier):
+    user_identifier = (user_identifier or "").strip().lower()
+    return any(user_identifier.startswith(prefix) for prefix in TRANSLATION_BYPASS_PREFIXES)
+
+
 def process_chat_message(message, user="guest", save_log=True):
     message = (message or "").strip()
     if not message:
@@ -37,17 +50,22 @@ def process_chat_message(message, user="guest", save_log=True):
     match_source = None
     confidence = None
     response_route = "unknown"
+    bypass_translation = _should_bypass_translation(user)
 
     try:
-        try:
-            user_lang = detect(message)
-        except LangDetectException:
+        if bypass_translation:
+            translated_message = message
             user_lang = "en"
+        else:
+            try:
+                user_lang = detect(message)
+            except LangDetectException:
+                user_lang = "en"
 
-        if user_lang not in SUPPORTED_LANGUAGES:
-            user_lang = "en"
+            if user_lang not in SUPPORTED_LANGUAGES:
+                user_lang = "en"
 
-        translated_message = translate_to_en(message, user_lang) if user_lang != "en" else message
+            translated_message = translate_to_en(message, user_lang) if user_lang != "en" else message
         translated_message = translated_message.lower()
 
         sentiment = detect_sentiment(translated_message)
@@ -68,7 +86,7 @@ def process_chat_message(message, user="guest", save_log=True):
             confidence = chatbot_result.get("confidence")
             response_route = "faq_model"
 
-        final_response = translate_from_en(response_en, user_lang) if user_lang != "en" else response_en
+        final_response = translate_from_en(response_en, user_lang) if user_lang != "en" and not bypass_translation else response_en
 
     except Exception as e:
         print("Translation or routing error:", e)

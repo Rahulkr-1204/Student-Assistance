@@ -12,7 +12,7 @@ from routes.auth_routes import auth_routes
 from routes.admin_routes import admin_routes
 from routes.social_routes import social_routes
 from routes.ai_features_routes import ai_features_routes
-from services.chat_engine import process_chat_message
+from services.chat_engine import process_chat_message, warm_chatbot_model
 from database import check_mongo_connection, DB_NAME
 
 from student.admission_routes import admission_routes
@@ -23,6 +23,12 @@ from student.campus_routes import campus_routes
 
 # Initialize app
 app = Flask(__name__)
+
+try:
+    warm_chatbot_model()
+    print("[startup] Chatbot model warmed successfully")
+except Exception as e:
+    print(f"[startup] Chatbot warmup failed: {e}")
 
 allowed_origins = {
     "http://localhost:5173",

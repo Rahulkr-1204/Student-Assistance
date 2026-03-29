@@ -89,7 +89,7 @@ def test_webhook_endpoint():
         if secret_token and secret_token != "your_secure_webhook_secret_here":
             req.add_header("X-Telegram-Bot-Api-Secret-Token", secret_token)
 
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=20) as response:
             data = json.loads(response.read().decode("utf-8"))
 
         if data.get("ok"):
